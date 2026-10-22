@@ -101,7 +101,7 @@ function validateFormPayload(body, { partial }) {
         if (field.fieldId !== undefined && typeof field.fieldId !== 'string') {
           errors.push({ field: where('fieldId'), message: `Поле ${index + 1}: неверный идентификатор поля` });
         }
-        if (field.type === 'select') {
+        if (field.type === 'select' || field.type === 'radio' || field.type === 'checkbox_group') {
           if (!Array.isArray(field.options) || !field.options.length) {
             errors.push({
               field: where('options'),

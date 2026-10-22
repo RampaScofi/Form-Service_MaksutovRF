@@ -78,6 +78,20 @@ data/
 
 ## Основные эндпоинты
 
+Типы полей конструктора (9 типов):
+
+| Тип | Виджет | Варианты |
+|---|---|---|
+| `text_short` | `input[type=text]` | ≤300 символов |
+| `text_long` | `textarea` | ≤5000 символов |
+| `email` | `input[type=email]` | regex-валидация |
+| `select` | `select` | обязательны `options` |
+| `number` | `input[type=number]` | только цифры, десятичная `,` или `.` |
+| `date` | `input[type=date]` | формат `YYYY-MM-DD` |
+| `phone` | `input[type=tel]` | `+`, цифры, пробелы, дефисы, скобки; 7–15 цифр |
+| `radio` | группа `input[type=radio]` | обязательны `options` |
+| `checkbox_group` | группа `input[type=checkbox]` | обязательны `options` |
+
 Админка:
 
 - `GET /admin` — HTML админки

@@ -481,4 +481,295 @@ describe('routes', () => {
     assert.strictEqual(answers.length, 1);
     assert.strictEqual(answers[0].answers[0].value, 'test@example.com');
   });
+
+  // ---- NEW TYPES: number ----
+  test('number: валидное 42 → 201', async () => {
+    const form = store.createForm({
+      name: 'Number Test',
+      fields: [{ type: 'number', label: 'Age', required: true, fieldId: 'num1' }],
+    });
+    const pub = store.publishForm(form.id);
+    const res = await request('POST', `/api/forms/${pub.slug}/submit`, {
+      answers: [{ fieldId: 'num1', value: '42' }],
+    });
+    assert.strictEqual(res.status, 201);
+  });
+
+  test('number: валидное 42,5 → 201', async () => {
+    const form = store.createForm({
+      name: 'Number Decimal',
+      fields: [{ type: 'number', label: 'Score', required: true, fieldId: 'num2' }],
+    });
+    const pub = store.publishForm(form.id);
+    const res = await request('POST', `/api/forms/${pub.slug}/submit`, {
+      answers: [{ fieldId: 'num2', value: '42,5' }],
+    });
+    assert.strictEqual(res.status, 201);
+  });
+
+  test('number: abc → 400', async () => {
+    const form = store.createForm({
+      name: 'Number Invalid',
+      fields: [{ type: 'number', label: 'Q', required: true, fieldId: 'num3' }],
+    });
+    const pub = store.publishForm(form.id);
+    const res = await request('POST', `/api/forms/${pub.slug}/submit`, {
+      answers: [{ fieldId: 'num3', value: 'abc' }],
+    });
+    assert.strictEqual(res.status, 400);
+    assert.strictEqual(res.data.errors[0].fieldId, 'num3');
+  });
+
+  test('number: 12px → 400', async () => {
+    const form = store.createForm({
+      name: 'Number Px',
+      fields: [{ type: 'number', label: 'Q', required: true, fieldId: 'num4' }],
+    });
+    const pub = store.publishForm(form.id);
+    const res = await request('POST', `/api/forms/${pub.slug}/submit`, {
+      answers: [{ fieldId: 'num4', value: '12px' }],
+    });
+    assert.strictEqual(res.status, 400);
+  });
+
+  // ---- NEW TYPES: date ----
+  test('date: валидная 2026-10-22 → 201', async () => {
+    const form = store.createForm({
+      name: 'Date Test',
+      fields: [{ type: 'date', label: 'Born', required: true, fieldId: 'dt1' }],
+    });
+    const pub = store.publishForm(form.id);
+    const res = await request('POST', `/api/forms/${pub.slug}/submit`, {
+      answers: [{ fieldId: 'dt1', value: '2026-10-22' }],
+    });
+    assert.strictEqual(res.status, 201);
+  });
+
+  test('date: 2026-13-45 → 400', async () => {
+    const form = store.createForm({
+      name: 'Date Invalid',
+      fields: [{ type: 'date', label: 'Q', required: true, fieldId: 'dt2' }],
+    });
+    const pub = store.publishForm(form.id);
+    const res = await request('POST', `/api/forms/${pub.slug}/submit`, {
+      answers: [{ fieldId: 'dt2', value: '2026-13-45' }],
+    });
+    assert.strictEqual(res.status, 400);
+  });
+
+  test('date: 22.10.2026 → 400', async () => {
+    const form = store.createForm({
+      name: 'Date Format',
+      fields: [{ type: 'date', label: 'Q', required: true, fieldId: 'dt3' }],
+    });
+    const pub = store.publishForm(form.id);
+    const res = await request('POST', `/api/forms/${pub.slug}/submit`, {
+      answers: [{ fieldId: 'dt3', value: '22.10.2026' }],
+    });
+    assert.strictEqual(res.status, 400);
+  });
+
+  // ---- NEW TYPES: phone ----
+  test('phone: +7 (999) 123-45-67 → 201', async () => {
+    const form = store.createForm({
+      name: 'Phone Test',
+      fields: [{ type: 'phone', label: 'Tel', required: true, fieldId: 'ph1' }],
+    });
+    const pub = store.publishForm(form.id);
+    const res = await request('POST', `/api/forms/${pub.slug}/submit`, {
+      answers: [{ fieldId: 'ph1', value: '+7 (999) 123-45-67' }],
+    });
+    assert.strictEqual(res.status, 201);
+  });
+
+  test('phone: 123 → 400 (мало цифр)', async () => {
+    const form = store.createForm({
+      name: 'Phone Short',
+      fields: [{ type: 'phone', label: 'Q', required: true, fieldId: 'ph2' }],
+    });
+    const pub = store.publishForm(form.id);
+    const res = await request('POST', `/api/forms/${pub.slug}/submit`, {
+      answers: [{ fieldId: 'ph2', value: '123' }],
+    });
+    assert.strictEqual(res.status, 400);
+  });
+
+  test('phone: abc → 400', async () => {
+    const form = store.createForm({
+      name: 'Phone Letters',
+      fields: [{ type: 'phone', label: 'Q', required: true, fieldId: 'ph3' }],
+    });
+    const pub = store.publishForm(form.id);
+    const res = await request('POST', `/api/forms/${pub.slug}/submit`, {
+      answers: [{ fieldId: 'ph3', value: 'abc' }],
+    });
+    assert.strictEqual(res.status, 400);
+  });
+
+  // ---- NEW TYPES: radio ----
+  test('radio: значение из options → 201', async () => {
+    const form = store.createForm({
+      name: 'Radio Test',
+      fields: [{ type: 'radio', label: 'Format', required: true, fieldId: 'rad1', options: ['Очно', 'Онлайн'] }],
+    });
+    const pub = store.publishForm(form.id);
+    const res = await request('POST', `/api/forms/${pub.slug}/submit`, {
+      answers: [{ fieldId: 'rad1', value: 'Очно' }],
+    });
+    assert.strictEqual(res.status, 201);
+  });
+
+  test('radio: значение вне списка → 400', async () => {
+    const form = store.createForm({
+      name: 'Radio Out',
+      fields: [{ type: 'radio', label: 'Q', required: true, fieldId: 'rad2', options: ['A', 'B'] }],
+    });
+    const pub = store.publishForm(form.id);
+    const res = await request('POST', `/api/forms/${pub.slug}/submit`, {
+      answers: [{ fieldId: 'rad2', value: 'C' }],
+    });
+    assert.strictEqual(res.status, 400);
+  });
+
+  test('radio: пустой обязательный → 400', async () => {
+    const form = store.createForm({
+      name: 'Radio Empty',
+      fields: [{ type: 'radio', label: 'Q', required: true, fieldId: 'rad3', options: ['A', 'B'] }],
+    });
+    const pub = store.publishForm(form.id);
+    const res = await request('POST', `/api/forms/${pub.slug}/submit`, {
+      answers: [{ fieldId: 'rad3', value: '' }],
+    });
+    assert.strictEqual(res.status, 400);
+  });
+
+  // ---- NEW TYPES: checkbox_group ----
+  test('checkbox_group: "Очно, Онлайн" → 201', async () => {
+    const form = store.createForm({
+      name: 'Checkbox Test',
+      fields: [{ type: 'checkbox_group', label: 'Format', required: true, fieldId: 'cb1', options: ['Очно', 'Онлайн'] }],
+    });
+    const pub = store.publishForm(form.id);
+    const res = await request('POST', `/api/forms/${pub.slug}/submit`, {
+      answers: [{ fieldId: 'cb1', value: 'Очно, Онлайн' }],
+    });
+    assert.strictEqual(res.status, 201);
+    assert.strictEqual(res.data.answers[0].value, 'Очно, Онлайн');
+  });
+
+  test('checkbox_group: "Очно, Другое" → 400', async () => {
+    const form = store.createForm({
+      name: 'Checkbox Out',
+      fields: [{ type: 'checkbox_group', label: 'Q', required: true, fieldId: 'cb2', options: ['Очно', 'Онлайн'] }],
+    });
+    const pub = store.publishForm(form.id);
+    const res = await request('POST', `/api/forms/${pub.slug}/submit`, {
+      answers: [{ fieldId: 'cb2', value: 'Очно, Другое' }],
+    });
+    assert.strictEqual(res.status, 400);
+  });
+
+  test('checkbox_group: пустой обязательный → 400', async () => {
+    const form = store.createForm({
+      name: 'Checkbox Empty',
+      fields: [{ type: 'checkbox_group', label: 'Q', required: true, fieldId: 'cb3', options: ['A', 'B'] }],
+    });
+    const pub = store.publishForm(form.id);
+    const res = await request('POST', `/api/forms/${pub.slug}/submit`, {
+      answers: [{ fieldId: 'cb3', value: '' }],
+    });
+    assert.strictEqual(res.status, 400);
+  });
+
+  // ---- radio/checkbox_group без options → 400 при создании формы ----
+  test('radio без options → 400 при создании', async () => {
+    const res = await request('POST', '/api/forms', {
+      name: 'No Options Radio',
+      fields: [{ type: 'radio', label: 'Q', required: true, fieldId: 'nor' }],
+    });
+    assert.strictEqual(res.status, 400);
+    assert.ok(res.data.errors.some(e => e.field.includes('options')));
+  });
+
+  test('checkbox_group без options → 400 при создании', async () => {
+    const res = await request('POST', '/api/forms', {
+      name: 'No Options Checkbox',
+      fields: [{ type: 'checkbox_group', label: 'Q', required: true, fieldId: 'nocb' }],
+    });
+    assert.strictEqual(res.status, 400);
+    assert.ok(res.data.errors.some(e => e.field.includes('options')));
+  });
+
+  // ---- необязательные пустые поля новых типов ----
+  test('необязательное число пустое → 201', async () => {
+    const form = store.createForm({
+      name: 'Optional Number',
+      fields: [{ type: 'number', label: 'Q', required: false, fieldId: 'on1' }],
+    });
+    const pub = store.publishForm(form.id);
+    const res = await request('POST', `/api/forms/${pub.slug}/submit`, {
+      answers: [{ fieldId: 'on1', value: '' }],
+    });
+    assert.strictEqual(res.status, 201);
+  });
+
+  test('необязательная дата пустая → 201', async () => {
+    const form = store.createForm({
+      name: 'Optional Date',
+      fields: [{ type: 'date', label: 'Q', required: false, fieldId: 'od1' }],
+    });
+    const pub = store.publishForm(form.id);
+    const res = await request('POST', `/api/forms/${pub.slug}/submit`, {
+      answers: [{ fieldId: 'od1', value: '' }],
+    });
+    assert.strictEqual(res.status, 201);
+  });
+
+  test('необязательный телефон пустой → 201', async () => {
+    const form = store.createForm({
+      name: 'Optional Phone',
+      fields: [{ type: 'phone', label: 'Q', required: false, fieldId: 'op1' }],
+    });
+    const pub = store.publishForm(form.id);
+    const res = await request('POST', `/api/forms/${pub.slug}/submit`, {
+      answers: [{ fieldId: 'op1', value: '' }],
+    });
+    assert.strictEqual(res.status, 201);
+  });
+
+  // ---- форма со всеми 9 типами ----
+  test('создание формы с 9 типами полей → 201', async () => {
+    const res = await request('POST', '/api/forms', {
+      name: 'All Types',
+      fields: [
+        { type: 'text_short', label: 'Name', required: true, fieldId: 'f1' },
+        { type: 'text_long', label: 'Bio', required: false, fieldId: 'f2' },
+        { type: 'email', label: 'Email', required: true, fieldId: 'f3' },
+        { type: 'select', label: 'Pick', required: false, fieldId: 'f4', options: ['A', 'B'] },
+        { type: 'number', label: 'Age', required: false, fieldId: 'f5' },
+        { type: 'date', label: 'Born', required: false, fieldId: 'f6' },
+        { type: 'phone', label: 'Tel', required: false, fieldId: 'f7' },
+        { type: 'radio', label: 'Format', required: false, fieldId: 'f8', options: ['Очно', 'Онлайн'] },
+        { type: 'checkbox_group', label: 'Modes', required: false, fieldId: 'f9', options: ['Очно', 'Онлайн'] },
+      ],
+    });
+    assert.strictEqual(res.status, 201);
+    assert.strictEqual(res.data.fields.length, 9);
+    res.data.fields.forEach((f) => {
+      assert.ok(f.fieldId, `fieldId для ${f.type} не пуст`);
+    });
+  });
+
+  // ---- checkbox_group: одно значение вне списка ----
+  test('checkbox_group: одно значение вне списка → 400', async () => {
+    const form = store.createForm({
+      name: 'CB Single Out',
+      fields: [{ type: 'checkbox_group', label: 'Q', required: true, fieldId: 'cs1', options: ['A', 'B'] }],
+    });
+    const pub = store.publishForm(form.id);
+    const res = await request('POST', `/api/forms/${pub.slug}/submit`, {
+      answers: [{ fieldId: 'cs1', value: 'C' }],
+    });
+    assert.strictEqual(res.status, 400);
+  });
 });

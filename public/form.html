@@ -33,10 +33,32 @@
       var submitBtn = document.getElementById('submit-btn');
 
       var emailRe = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+      var numberRe = /^\d+([.,]\d+)?$/;
+      var dateRe = /^\d{4}-\d{2}-\d{2}$/;
+      var phoneAllowedRe = /^[+\d\s\-()]+$/;
+
+      /** Read the current value of a field from the DOM. */
+      function readValue(field) {
+        if (field.type === 'radio') {
+          var checked = form.querySelector('input[name="' + field.fieldId + '"]:checked');
+          return checked ? checked.value : '';
+        }
+        if (field.type === 'checkbox_group') {
+          var allChecked = form.querySelectorAll('input[name="' + field.fieldId + '"]:checked');
+          var vals = [];
+          allChecked.forEach(function (el) { vals.push(el.value); });
+          var order = field.options || [];
+          vals.sort(function (a, b) { return order.indexOf(a) - order.indexOf(b); });
+          return vals.join(', ');
+        }
+        var el = document.getElementById(field.fieldId);
+        return el ? (el.value || '') : '';
+      }
 
       schema.fields.forEach(function (field) {
         var wrapper = document.createElement('div');
         wrapper.className = 'form-field';
+        wrapper.setAttribute('data-field-id', field.fieldId);
 
         var label = document.createElement('label');
         label.htmlFor = field.fieldId;
@@ -88,6 +110,64 @@
             select.appendChild(o);
           });
           wrapper.appendChild(select);
+        } else if (field.type === 'number') {
+          var numInput = document.createElement('input');
+          numInput.type = 'number';
+          numInput.inputMode = 'numeric';
+          numInput.name = field.fieldId;
+          numInput.id = field.fieldId;
+          if (field.required) numInput.setAttribute('required', '');
+          wrapper.appendChild(numInput);
+        } else if (field.type === 'date') {
+          var dateInput = document.createElement('input');
+          dateInput.type = 'date';
+          dateInput.name = field.fieldId;
+          dateInput.id = field.fieldId;
+          if (field.required) dateInput.setAttribute('required', '');
+          wrapper.appendChild(dateInput);
+        } else if (field.type === 'phone') {
+          var phoneInput = document.createElement('input');
+          phoneInput.type = 'tel';
+          phoneInput.inputMode = 'tel';
+          phoneInput.name = field.fieldId;
+          phoneInput.id = field.fieldId;
+          if (field.required) phoneInput.setAttribute('required', '');
+          wrapper.appendChild(phoneInput);
+        } else if (field.type === 'radio' || field.type === 'checkbox_group') {
+          var choiceGroup = document.createElement('fieldset');
+          choiceGroup.className = 'choice-group';
+          choiceGroup.setAttribute('data-field-id', field.fieldId);
+          var legend = document.createElement('legend');
+          legend.textContent = field.label;
+          if (field.required) {
+            var reqMarker = document.createElement('span');
+            reqMarker.className = 'required-marker';
+            reqMarker.textContent = '*';
+            legend.appendChild(reqMarker);
+          }
+          choiceGroup.appendChild(legend);
+          (field.options || []).forEach(function (opt, idx) {
+            var optDiv = document.createElement('div');
+            optDiv.className = 'choice-option';
+            var cb = document.createElement('input');
+            cb.type = field.type === 'radio' ? 'radio' : 'checkbox';
+            cb.name = field.fieldId;
+            cb.id = field.fieldId + '__' + idx;
+            cb.value = opt;
+            if (field.required && field.type === 'radio') cb.setAttribute('required', '');
+            var cbLabel = document.createElement('label');
+            cbLabel.htmlFor = cb.id;
+            cbLabel.textContent = opt;
+            cbLabel.style.cursor = 'pointer';
+            cbLabel.style.minHeight = '40px';
+            cbLabel.style.display = 'flex';
+            cbLabel.style.alignItems = 'center';
+            cbLabel.style.padding = '0.25rem 0';
+            optDiv.appendChild(cb);
+            optDiv.appendChild(cbLabel);
+            choiceGroup.appendChild(optDiv);
+          });
+          wrapper.appendChild(choiceGroup);
         }
 
         var errorEl = document.createElement('div');
@@ -105,8 +185,7 @@
         var clientErrors = [];
 
         schema.fields.forEach(function (field) {
-          var el = document.getElementById(field.fieldId);
-          var value = el ? el.value : '';
+          var value = readValue(field);
           var trimmed = value.trim();
 
           if (field.required && !trimmed) {
@@ -119,8 +198,46 @@
             clientErrors.push({ fieldId: field.fieldId, message: 'Укажите корректный email' });
           }
 
-          if (field.type === 'select' && field.options && !field.options.includes(trimmed)) {
+          if (field.type === 'number' && !numberRe.test(trimmed)) {
+            clientErrors.push({ fieldId: field.fieldId, message: 'Укажите число' });
+          }
+
+          if (field.type === 'date') {
+            if (!dateRe.test(trimmed)) {
+              clientErrors.push({ fieldId: field.fieldId, message: 'Укажите корректную дату' });
+            } else {
+              var parts = trimmed.split('-').map(Number);
+              var dt = new Date(parts[0], parts[1] - 1, parts[2]);
+              if (dt.getFullYear() !== parts[0] || dt.getMonth() !== parts[1] - 1 || dt.getDate() !== parts[2]) {
+                clientErrors.push({ fieldId: field.fieldId, message: 'Укажите корректную дату' });
+              }
+            }
+          }
+
+          if (field.type === 'phone') {
+            if (!phoneAllowedRe.test(trimmed)) {
+              clientErrors.push({ fieldId: field.fieldId, message: 'Укажите корректный номер телефона' });
+            } else {
+              var digitCount = (trimmed.match(/\d/g) || []).length;
+              if (digitCount < 7 || digitCount > 15) {
+                clientErrors.push({ fieldId: field.fieldId, message: 'Укажите корректный номер телефона' });
+              }
+            }
+          }
+
+          if ((field.type === 'select' || field.type === 'radio') && field.options && !field.options.includes(trimmed)) {
             clientErrors.push({ fieldId: field.fieldId, message: 'Выберите значение из списка' });
+          }
+
+          if (field.type === 'checkbox_group' && field.options) {
+            var cbParts = trimmed.split(', ');
+            var cbSeen = {};
+            var cbBad = false;
+            for (var ci = 0; ci < cbParts.length; ci++) {
+              if (field.options.indexOf(cbParts[ci]) === -1 || cbSeen[cbParts[ci]]) { cbBad = true; break; }
+              cbSeen[cbParts[ci]] = true;
+            }
+            if (cbBad) clientErrors.push({ fieldId: field.fieldId, message: 'Выберите значения из списка' });
           }
 
           if (field.type === 'text_short' && trimmed.length > 300) {
@@ -166,7 +283,7 @@
       function clearErrors() {
         var els = form.querySelectorAll('.field-error');
         for (var i = 0; i < els.length; i++) els[i].textContent = '';
-        form.querySelectorAll('.form-field').forEach(function (f) { f.classList.remove('has-error'); });
+        form.querySelectorAll('.form-field, .choice-group').forEach(function (f) { f.classList.remove('has-error'); });
         successEl.style.display = 'none';
         genericErrorEl.style.display = 'none';
       }
@@ -175,11 +292,22 @@
         errors.forEach(function (err) {
           var el = document.getElementById('error-' + err.fieldId);
           if (el) el.textContent = err.message;
-          var field = document.getElementById(err.fieldId);
-          if (field) { var fw = field.closest('.form-field'); if (fw) fw.classList.add('has-error'); }
+          var fieldEl = document.getElementById(err.fieldId);
+          if (fieldEl) {
+            var fw = fieldEl.closest('.form-field');
+            if (fw) fw.classList.add('has-error');
+          } else {
+            var fallback = form.querySelector('[data-field-id="' + err.fieldId + '"]');
+            if (fallback) fallback.classList.add('has-error');
+          }
         });
         form.querySelectorAll('.form-field').forEach(function (f) {
-          if (!f.querySelector('.field-error').textContent) f.classList.remove('has-error');
+          var errDiv = f.querySelector('.field-error');
+          if (errDiv && !errDiv.textContent) f.classList.remove('has-error');
+        });
+        form.querySelectorAll('.choice-group').forEach(function (f) {
+          var errDiv = f.closest('.form-field') ? f.closest('.form-field').querySelector('.field-error') : null;
+          if (errDiv && !errDiv.textContent) f.classList.remove('has-error');
         });
       }
     })();

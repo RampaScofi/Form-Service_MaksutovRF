@@ -15,6 +15,9 @@ const TEMPLATE = path.join(__dirname, '..', 'public', 'form.html');
 const NOT_FOUND_PAGE = path.join(__dirname, '..', 'public', 'index.html');
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+const NUMBER_RE = /^\d+([.,]\d+)?$/;
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+const PHONE_ALLOWED_RE = /^[+\d\s\-()]+$/;
 const MAX_SHORT = 300;
 const MAX_LONG = 5000;
 
@@ -82,12 +85,55 @@ function validateSubmission(form, answers) {
       errors.push({ fieldId: field.fieldId, message: 'Укажите корректный email' });
     }
 
-    if (field.type === 'select' && !Array.isArray(field.options)) {
+    if (field.type === 'number' && !NUMBER_RE.test(trimmed)) {
+      errors.push({ fieldId: field.fieldId, message: 'Укажите число' });
+    }
+
+    if (field.type === 'date') {
+      if (!DATE_RE.test(trimmed)) {
+        errors.push({ fieldId: field.fieldId, message: 'Укажите корректную дату' });
+      } else {
+        const [y, m, d] = trimmed.split('-').map(Number);
+        const dt = new Date(y, m - 1, d);
+        if (dt.getFullYear() !== y || dt.getMonth() !== m - 1 || dt.getDate() !== d) {
+          errors.push({ fieldId: field.fieldId, message: 'Укажите корректную дату' });
+        }
+      }
+    }
+
+    if (field.type === 'phone') {
+      if (!PHONE_ALLOWED_RE.test(trimmed)) {
+        errors.push({ fieldId: field.fieldId, message: 'Укажите корректный номер телефона' });
+      } else {
+        const digitCount = (trimmed.match(/\d/g) || []).length;
+        if (digitCount < 7 || digitCount > 15) {
+          errors.push({ fieldId: field.fieldId, message: 'Укажите корректный номер телефона' });
+        }
+      }
+    }
+
+    if ((field.type === 'select' || field.type === 'radio') && !Array.isArray(field.options)) {
       errors.push({ fieldId: field.fieldId, message: 'Недопустимое значение' });
       return;
     }
-    if (field.type === 'select' && field.options && !field.options.includes(trimmed)) {
+    if ((field.type === 'select' || field.type === 'radio') && field.options && !field.options.includes(trimmed)) {
       errors.push({ fieldId: field.fieldId, message: 'Выберите значение из списка' });
+    }
+
+    if (field.type === 'checkbox_group') {
+      if (!Array.isArray(field.options)) {
+        errors.push({ fieldId: field.fieldId, message: 'Недопустимое значение' });
+        return;
+      }
+      const parts = trimmed.split(', ');
+      const seen = new Set();
+      for (const part of parts) {
+        if (!field.options.includes(part) || seen.has(part)) {
+          errors.push({ fieldId: field.fieldId, message: 'Выберите значения из списка' });
+          break;
+        }
+        seen.add(part);
+      }
     }
 
     if (field.type === 'text_short' && trimmed.length > MAX_SHORT) {

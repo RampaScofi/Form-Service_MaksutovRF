@@ -20,7 +20,7 @@ const DEFAULT_DATA_DIR = path.join(__dirname, '..', 'data');
 const FORMS_FILE = 'forms.json';
 const ANSWERS_DIR = 'answers';
 
-const FIELD_TYPES = ['text_short', 'text_long', 'email', 'select'];
+const FIELD_TYPES = ['text_short', 'text_long', 'email', 'select', 'number', 'date', 'phone', 'radio', 'checkbox_group'];
 const MAX_FIELDS = 50;
 const MAX_OPTIONS = 200;
 
@@ -178,7 +178,7 @@ function normalizeFields(fields) {
       label: String(item.label === undefined || item.label === null ? '' : item.label).trim(),
       required: item.required === true,
     };
-    if (field.type === 'select') {
+    if (field.type === 'select' || field.type === 'radio' || field.type === 'checkbox_group') {
       const options = Array.isArray(item.options) ? item.options : [];
       field.options = options
         .map((option) => String(option).trim())

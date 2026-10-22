@@ -20,7 +20,7 @@
     .answer-detail dd { margin: 0 0 0.5rem; color: #4b5563; word-break: break-all; }
     .empty-state { text-align: center; padding: 2rem; color: #9ca3af; font-size: 1.1rem; }
     .field-list { display: flex; flex-direction: column; gap: 0.75rem; }
-    .field-row { display: grid; grid-template-columns: 120px 1fr 60px 1fr auto; gap: 0.5rem; align-items: center; padding: 0.5rem; background: #f9fafb; border-radius: 4px; }
+    .field-row { display: grid; grid-template-columns: 120px 1fr 100px 1fr auto; gap: 0.5rem; align-items: center; padding: 0.5rem; background: #f9fafb; border-radius: 4px; }
     .field-row select, .field-row input { width: 100%; }
     .field-row .options-area { grid-column: 1 / -1; }
     .field-row .options-area textarea { width: 100%; min-height: 2.5rem; font-size: 0.85rem; }
@@ -71,7 +71,7 @@
       </div>
       <div class="form-actions">
         <button type="submit" class="btn btn-primary">Сохранить</button>
-        <button type="button" id="btn-publish" class="btn btn-warning">Опубликовать</button>
+        <button type="button" id="btn-publish" class="btn btn-success">Опубликовать</button>
         <a id="link-preview" href="#" target="_blank" class="btn btn-secondary" style="display:none;">Открыть форму →</a>
       </div>
     </form>
@@ -144,7 +144,7 @@
                 '<td>' + esc(f.answersCount || 0) + '</td>' +
                 '<td>' +
                   '<button class="btn btn-secondary btn-sm edit-btn" data-id="' + esc(f.id) + '">Ред.</button> ' +
-                  '<button class="btn btn-sm ' + (f.status === 'draft' ? 'btn-warning' : 'btn-warning') + ' publish-btn" data-id="' + esc(f.id) + '" data-status="' + esc(f.status) + '">' + (f.status === 'draft' ? 'Опубликовать' : 'Снять с публикации') + '</button> ' +
+                  '<button class="btn btn-sm ' + (f.status === 'draft' ? 'btn-success' : 'btn-warning') + ' publish-btn" data-id="' + esc(f.id) + '" data-status="' + esc(f.status) + '">' + (f.status === 'draft' ? 'Опубликовать' : 'Снять с публикации') + '</button> ' +
                   '<button class="btn btn-sm btn-danger delete-btn" data-id="' + esc(f.id) + '">Удалить</button> ' +
                   '<button class="btn btn-sm btn-secondary answers-btn" data-id="' + esc(f.id) + '">Ответы</button>' +
                 '</td></tr>';
@@ -260,8 +260,8 @@
 
         var typeSel = document.createElement('select');
         typeSel.className = 'field-type';
-        var types = ['text_short', 'text_long', 'email', 'select'];
-        var labels = { text_short: 'Текст (краткий)', text_long: 'Текст (развёрнутый)', email: 'Email', select: 'Выпадающий список' };
+        var types = ['text_short', 'text_long', 'email', 'select', 'number', 'date', 'phone', 'radio', 'checkbox_group'];
+        var labels = { text_short: 'Текст (краткий)', text_long: 'Текст (развёрнутый)', email: 'Email', select: 'Выпадающий список', number: 'Число', date: 'Дата', phone: 'Телефон', radio: 'Один вариант', checkbox_group: 'Несколько вариантов' };
         types.forEach(function (t) {
           var opt = document.createElement('option');
           opt.value = t;
@@ -280,6 +280,13 @@
         reqCheck.className = 'field-required';
         reqCheck.type = 'checkbox';
         if (data && data.required) reqCheck.checked = true;
+        var reqLabel = document.createElement('label');
+        reqLabel.className = 'field-required-label';
+        reqLabel.title = 'Студент обязан заполнить это поле';
+        reqLabel.appendChild(reqCheck);
+        var reqText = document.createElement('span');
+        reqText.textContent = ' Обязательное';
+        reqLabel.appendChild(reqText);
 
         var optionsArea = document.createElement('div');
         optionsArea.className = 'options-area';
@@ -300,13 +307,13 @@
         removeBtn.addEventListener('click', function () { row.remove(); });
 
         typeSel.addEventListener('change', function () {
-          optionsTextarea.style.display = typeSel.value === 'select' ? '' : 'none';
+          optionsTextarea.style.display = (typeSel.value === 'select' || typeSel.value === 'radio' || typeSel.value === 'checkbox_group') ? '' : 'none';
         });
-        if (data && data.type === 'select') optionsTextarea.style.display = '';
+        if (data && (data.type === 'select' || data.type === 'radio' || data.type === 'checkbox_group')) optionsTextarea.style.display = '';
 
         row.appendChild(typeSel);
         row.appendChild(labelInput);
-        row.appendChild(reqCheck);
+        row.appendChild(reqLabel);
         row.appendChild(optionsArea);
         row.appendChild(removeBtn);
         container.appendChild(row);
