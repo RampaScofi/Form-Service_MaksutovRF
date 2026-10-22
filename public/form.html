@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Форма</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <div class="form-container">
+    <h1 id="form-title"></h1>
+    <p id="form-description" class="form-description"></p>
+    <form id="form" novalidate></form>
+    <div id="success" class="success-message" style="display:none;"></div>
+    <div id="generic-error" class="error-message" style="display:none;"></div>
+  </div>
+
+  <script id="form-schema" type="application/json">__FORM_SCHEMA_JSON__</script>
+
+  <script>
+    (function () {
+      var raw = document.getElementById('form-schema').textContent;
+      var schema = JSON.parse(raw);
+
+      document.getElementById('form-title').textContent = schema.name;
+      document.getElementById('form-description').textContent = schema.description || '';
+
+      var form = document.getElementById('form');
+      var successEl = document.getElementById('success');
+      var genericErrorEl = document.getElementById('generic-error');
+
+      var emailRe = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+
+      schema.fields.forEach(function (field) {
+        var wrapper = document.createElement('div');
+        wrapper.className = 'form-field';
+
+        var label = document.createElement('label');
+        label.htmlFor = field.fieldId;
+        label.textContent = field.label;
+        if (field.required) {
+          var asterisk = document.createElement('span');
+          asterisk.className = 'required-marker';
+          asterisk.textContent = '*';
+          label.appendChild(asterisk);
+        }
+        wrapper.appendChild(label);
+
+        if (field.type === 'text_short') {
+          var input = document.createElement('input');
+          input.type = 'text';
+          input.name = field.fieldId;
+          input.id = field.fieldId;
+          if (field.required) input.setAttribute('required', '');
+          input.maxLength = 300;
+          wrapper.appendChild(input);
+        } else if (field.type === 'text_long') {
+          var textarea = document.createElement('textarea');
+          textarea.name = field.fieldId;
+          textarea.id = field.fieldId;
+          textarea.rows = 4;
+          if (field.required) textarea.setAttribute('required', '');
+          textarea.maxLength = 5000;
+          wrapper.appendChild(textarea);
+        } else if (field.type === 'email') {
+          var emailInput = document.createElement('input');
+          emailInput.type = 'email';
+          emailInput.name = field.fieldId;
+          emailInput.id = field.fieldId;
+          if (field.required) emailInput.setAttribute('required', '');
+          wrapper.appendChild(emailInput);
+        } else if (field.type === 'select') {
+          var select = document.createElement('select');
+          select.name = field.fieldId;
+          select.id = field.fieldId;
+          if (field.required) select.setAttribute('required', '');
+          var defaultOption = document.createElement('option');
+          defaultOption.value = '';
+          defaultOption.textContent = '-- выберите --';
+          select.appendChild(defaultOption);
+          (field.options || []).forEach(function (opt) {
+            var o = document.createElement('option');
+            o.value = opt;
+            o.textContent = opt;
+            select.appendChild(o);
+          });
+          wrapper.appendChild(select);
+        }
+
+        var errorEl = document.createElement('div');
+        errorEl.className = 'field-error';
+        errorEl.id = 'error-' + field.fieldId;
+        wrapper.appendChild(errorEl);
+
+        form.appendChild(wrapper);
+      });
+
+      form.addEventListener('submit', function (e) {
+        e.preventDefault();
+        clearErrors();
+        var answers = [];
+        var clientErrors = [];
+
+        schema.fields.forEach(function (field) {
+          var el = document.getElementById(field.fieldId);
+          var value = el ? el.value : '';
+          var trimmed = value.trim();
+
+          if (field.required && !trimmed) {
+            clientErrors.push({ fieldId: field.fieldId, message: 'Поле обязательно для заполнения' });
+            return;
+          }
+          if (trimmed === '') return;
+
+          if (field.type === 'email' && !emailRe.test(trimmed)) {
+            clientErrors.push({ fieldId: field.fieldId, message: 'Укажите корректный email' });
+          }
+
+          if (field.type === 'select' && field.options && !field.options.includes(trimmed)) {
+            clientErrors.push({ fieldId: field.fieldId, message: 'Выберите значение из списка' });
+          }
+
+          if (field.type === 'text_short' && trimmed.length > 300) {
+            clientErrors.push({ fieldId: field.fieldId, message: 'Не более 300 символов' });
+          }
+          if (field.type === 'text_long' && trimmed.length > 5000) {
+            clientErrors.push({ fieldId: field.fieldId, message: 'Не более 5000 символов' });
+          }
+
+          answers.push({ fieldId: field.fieldId, value: trimmed });
+        });
+
+        if (clientErrors.length) {
+          showClientErrors(clientErrors);
+          return;
+        }
+
+        fetch('/api/forms/' + schema.id + '/submit', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ answers: answers })
+        })
+        .then(function (r) { return r.json(); })
+        .then(function (data) {
+          if (data.errors && data.errors.length) {
+            showClientErrors(data.errors);
+            return;
+          }
+          form.style.display = 'none';
+          successEl.style.display = 'block';
+          successEl.textContent = 'Спасибо! Ваша заявка отправлена.';
+        })
+        .catch(function () {
+          genericErrorEl.style.display = 'block';
+          genericErrorEl.textContent = 'Ошибка отправки. Попробуйте позже.';
+        });
+      });
+
+      function clearErrors() {
+        var els = form.querySelectorAll('.field-error');
+        for (var i = 0; i < els.length; i++) els[i].textContent = '';
+        form.querySelectorAll('.form-field').forEach(function (f) { f.classList.remove('has-error'); });
+        successEl.style.display = 'none';
+        genericErrorEl.style.display = 'none';
+      }
+
+      function showClientErrors(errors) {
+        errors.forEach(function (err) {
+          var el = document.getElementById('error-' + err.fieldId);
+          if (el) el.textContent = err.message;
+          var field = document.getElementById(err.fieldId);
+          if (field) { var fw = field.closest('.form-field'); if (fw) fw.classList.add('has-error'); }
+        });
+        form.querySelectorAll('.form-field').forEach(function (f) {
+          if (!f.querySelector('.field-error').textContent) f.classList.remove('has-error');
+        });
+      }
+    })();
+  </script>
+</body>
+</html>

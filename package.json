@@ -1,0 +1,17 @@
+{
+  "name": "form-service",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Form service MVP for the career platform. Local demo, admin has no authorization.",
+  "main": "server.js",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "start": "node server.js",
+    "test": "node --test tests/*.js"
+  },
+  "dependencies": {
+    "express": "^4.19.2"
+  }
+}

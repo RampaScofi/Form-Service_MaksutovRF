@@ -1,0 +1,425 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Админка — Сервис форм</title>
+  <link rel="stylesheet" href="/static/style.css">
+  <style>
+    .admin-tabs { display: flex; gap: 0; margin-bottom: 1.5rem; border-bottom: 2px solid #e5e7eb; }
+    .admin-tab { padding: 0.6rem 1.2rem; cursor: pointer; border: 1px solid transparent; border-bottom: none; color: #6b7280; text-decoration: none; font-size: 0.95rem; }
+    .admin-tab:hover { color: #2563eb; }
+    .admin-tab.active { color: #2563eb; border-color: #e5e7eb; border-bottom: 2px solid #fff; font-weight: 600; background: #fff; }
+    .view { display: none; }
+    .view.active { display: block; }
+    .answers-grid { display: grid; grid-template-columns: 1fr; gap: 1rem; }
+    .answer-card { background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 6px; padding: 1rem; }
+    .answer-card h4 { margin: 0 0 0.5rem; }
+    .answer-detail { margin-top: 0.5rem; }
+    .answer-detail dt { font-weight: 600; color: #374151; }
+    .answer-detail dd { margin: 0 0 0.5rem; color: #4b5563; word-break: break-all; }
+    .empty-state { text-align: center; padding: 2rem; color: #9ca3af; font-size: 1.1rem; }
+    .field-list { display: flex; flex-direction: column; gap: 0.75rem; }
+    .field-row { display: grid; grid-template-columns: 120px 1fr 60px 1fr auto; gap: 0.5rem; align-items: center; padding: 0.5rem; background: #f9fafb; border-radius: 4px; }
+    .field-row select, .field-row input { width: 100%; }
+    .field-row .options-area { grid-column: 1 / -1; }
+    .field-row .options-area textarea { width: 100%; min-height: 2.5rem; font-size: 0.85rem; }
+    .field-row .btn-remove { background: none; border: none; color: #ef4444; cursor: pointer; font-size: 1.2rem; padding: 0 0.5rem; }
+    .field-row .btn-remove:hover { background: #fef2f2; border-radius: 4px; }
+    .form-actions { display: flex; gap: 0.5rem; margin-top: 1rem; }
+    #editor-view .field-row select { font-size: 0.85rem; }
+    .answer-table-wrap { overflow-x: auto; }
+    .back-link { display: inline-block; margin-bottom: 1rem; color: #2563eb; text-decoration: none; cursor: pointer; }
+    .back-link:hover { text-decoration: underline; }
+  </style>
+</head>
+<body>
+  <header class="page-header">
+    <h1>Админка — Сервис форм</h1>
+  </header>
+
+  <nav class="admin-tabs">
+    <a class="admin-tab active" data-view="forms-view">Формы</a>
+    <a class="admin-tab" data-view="editor-view" style="display:none;">Конструктор</a>
+    <a class="admin-tab" data-view="answers-view" style="display:none;">Ответы</a>
+  </nav>
+
+  <!-- Forms list -->
+  <section id="forms-view" class="view active">
+    <button id="btn-new" class="btn btn-primary">+ Создать форму</button>
+    <div id="forms-list"></div>
+  </section>
+
+  <!-- Editor -->
+  <section id="editor-view" class="view">
+    <a class="back-link" id="back-to-forms">← Назад к формам</a>
+    <h2 id="editor-title">Новая форма</h2>
+    <form id="editor-form" novalidate>
+      <div class="form-field">
+        <label for="edit-name">Название формы</label>
+        <input id="edit-name" type="text" name="name" required maxlength="200">
+        <div class="field-error" id="err-name"></div>
+      </div>
+      <div class="form-field">
+        <label for="edit-description">Описание</label>
+        <textarea id="edit-description" name="description" rows="2" maxlength="2000"></textarea>
+      </div>
+      <div class="form-field">
+        <label>Поля формы</label>
+        <div id="fields-container" class="field-list"></div>
+        <button type="button" id="btn-add-field" class="btn btn-secondary" style="margin-top:0.75rem;">+ Добавить поле</button>
+      </div>
+      <div class="form-actions">
+        <button type="submit" class="btn btn-primary">Сохранить</button>
+        <button type="button" id="btn-publish" class="btn btn-warning">Опубликовать</button>
+        <a id="link-preview" href="#" target="_blank" class="btn btn-secondary" style="display:none;">Открыть форму →</a>
+      </div>
+    </form>
+  </section>
+
+  <!-- Answers -->
+  <section id="answers-view" class="view">
+    <a class="back-link" id="back-to-answers-list">← Назад к списку форм</a>
+    <h2>Ответы</h2>
+    <div id="answers-table-wrap"></div>
+    <div id="answer-detail" style="display:none;"></div>
+  </section>
+
+  <script>
+    (function () {
+      'use strict';
+
+      var API = '/api';
+      var currentFormId = null;
+      var currentAnswersFormId = null;
+      var fieldCounter = 0;
+
+      // --- helpers ---
+      function esc(s) {
+        var d = document.createElement('div');
+        d.textContent = s == null ? '' : String(s);
+        return d.innerHTML;
+      }
+
+      function showView(name) {
+        document.querySelectorAll('.view').forEach(function (v) { v.classList.remove('active'); });
+        document.getElementById(name).classList.add('active');
+        document.querySelectorAll('.admin-tab').forEach(function (t) {
+          t.classList.toggle('active', t.getAttribute('data-view') === name);
+        });
+        var hasEditor = document.querySelector('[data-view="editor-view"]');
+        hasEditor.style.display = name === 'editor-view' ? '' : 'none';
+        var hasAnswers = document.querySelector('[data-view="answers-view"]');
+        hasAnswers.style.display = name === 'answers-view' ? '' : 'none';
+      }
+
+      function api(path, opts) {
+        opts = opts || {};
+        opts.headers = Object.assign({ 'Content-Type': 'application/json' }, opts.headers || {});
+        return fetch(API + path, opts).then(function (r) { return r.json().then(function (d) { return { status: r.status, data: d }; }); });
+      }
+
+      // --- forms list ---
+      function loadForms() {
+        api('/forms')
+          .then(function (res) {
+            if (res.status !== 200) return;
+            var list = res.data;
+            var container = document.getElementById('forms-list');
+            if (!list.length) {
+              container.innerHTML = '<div class="empty-state">Форм нет. Создайте первую форму.</div>';
+              return;
+            }
+            var html = '<table class="data-table"><thead><tr>' +
+              '<th>Название</th><th>Статус</th><th>Ссылка</th><th>Полей</th><th>Ответов</th><th>Действия</th></tr></thead><tbody>';
+            list.forEach(function (f) {
+              var statusLabel = f.status === 'published' ? 'published' : 'draft';
+              var statusClass = f.status === 'published' ? 'status-published' : 'status-draft';
+              var link = f.slug ? '<a href="/f/' + esc(f.slug) + '" target="_blank">' + esc(f.slug) + '</a>' : '—';
+              html += '<tr>' +
+                '<td>' + esc(f.name) + '</td>' +
+                '<td><span class="status-badge ' + statusClass + '">' + esc(statusLabel) + '</span></td>' +
+                '<td>' + link + '</td>' +
+                '<td>' + esc(f.fieldsCount || 0) + '</td>' +
+                '<td>' + esc(f.answersCount || 0) + '</td>' +
+                '<td>' +
+                  '<button class="btn btn-secondary btn-sm edit-btn" data-id="' + esc(f.id) + '">Ред.</button> ' +
+                  '<button class="btn btn-sm ' + (f.status === 'draft' ? 'btn-warning' : 'btn-success') + ' publish-btn" data-id="' + esc(f.id) + '" data-status="' + esc(f.status) + '">' + (f.status === 'draft' ? 'Опубликовать' : 'Опубликована') + '</button> ' +
+                  '<button class="btn btn-sm btn-danger delete-btn" data-id="' + esc(f.id) + '">Удалить</button> ' +
+                  '<button class="btn btn-sm btn-secondary answers-btn" data-id="' + esc(f.id) + '">Ответы</button>' +
+                '</td></tr>';
+            });
+            html += '</tbody></table>';
+            container.innerHTML = html;
+
+            // event delegation
+            container.querySelectorAll('.edit-btn').forEach(function (b) {
+              b.addEventListener('click', function () { openEditor(this.getAttribute('data-id')); });
+            });
+            container.querySelectorAll('.publish-btn').forEach(function (b) {
+              b.addEventListener('click', function () { publishForm(this.getAttribute('data-id')); });
+            });
+            container.querySelectorAll('.delete-btn').forEach(function (b) {
+              b.addEventListener('click', function () { deleteForm(this.getAttribute('data-id')); });
+            });
+            container.querySelectorAll('.answers-btn').forEach(function (b) {
+              b.addEventListener('click', function () { loadAnswers(this.getAttribute('data-id')); });
+            });
+          });
+      }
+
+      function publishForm(id) {
+        api('/forms/' + id + '/publish', { method: 'PUT' })
+          .then(function (res) {
+            if (res.status !== 200) return;
+            loadForms();
+          });
+      }
+
+      function deleteForm(id) {
+        if (!confirm('Удалить форму и все ответы?')) return;
+        api('/forms/' + id, { method: 'DELETE' })
+          .then(function (res) {
+            if (res.status === 200) loadForms();
+          });
+      }
+
+      // --- editor ---
+      function openEditor(id) {
+        currentFormId = id;
+        document.getElementById('editor-title').textContent = 'Редактировать форму';
+        api('/forms/' + id)
+          .then(function (res) {
+            if (res.status !== 200) return;
+            var form = res.data;
+            document.getElementById('edit-name').value = form.name || '';
+            document.getElementById('edit-description').value = form.description || '';
+            fieldCounter = 0;
+            document.getElementById('fields-container').innerHTML = '';
+            (form.fields || []).forEach(function (f) { addFieldRow(f, false); });
+            var preview = document.getElementById('link-preview');
+            preview.style.display = form.slug ? '' : 'none';
+            preview.href = '/f/' + form.slug;
+            showView('editor-view');
+          });
+      }
+
+      function saveEditorForm(e) {
+        e.preventDefault();
+        var name = document.getElementById('edit-name').value.trim();
+        var description = document.getElementById('edit-description').value.trim();
+        var fields = [];
+        document.querySelectorAll('#fields-container .field-row').forEach(function (row) {
+          fields.push({
+            fieldId: row.getAttribute('data-field-id') || '',
+            type: row.querySelector('.field-type').value,
+            label: row.querySelector('.field-label').value.trim(),
+            required: row.querySelector('.field-required').checked,
+            options: row.querySelector('.field-options').value.split('\n').map(function (o) { return o.trim(); }).filter(Boolean),
+          });
+        });
+
+        var body = { name: name, description: description, fields: fields };
+        var method = currentFormId ? 'PUT' : 'POST';
+        var path = currentFormId ? '/forms/' + currentFormId : '/forms';
+
+        api(path, { method: method, body: JSON.stringify(body) })
+          .then(function (res) {
+            if (res.status === 200 || res.status === 201) {
+              if (!currentFormId && res.data.id) {
+                currentFormId = res.data.id;
+                document.getElementById('editor-title').textContent = 'Редактировать форму';
+              }
+              var preview = document.getElementById('link-preview');
+              preview.style.display = res.data.slug ? '' : 'none';
+              preview.href = res.data.slug ? '/f/' + res.data.slug : '';
+              loadForms();
+              showView('forms-view');
+            } else {
+              clearErrors();
+              (res.data.errors || []).forEach(function (err) {
+                var el = document.getElementById('err-' + err.field);
+                if (el) el.textContent = err.message;
+              });
+            }
+          });
+      }
+
+      function clearErrors() {
+        document.querySelectorAll('#editor-view .field-error').forEach(function (e) { e.textContent = ''; });
+      }
+
+      function addFieldRow(data, scroll) {
+        scroll = scroll || false;
+        fieldCounter += 1;
+        var container = document.getElementById('fields-container');
+        var row = document.createElement('div');
+        row.className = 'field-row';
+        row.setAttribute('data-field-id', data && data.fieldId ? data.fieldId : '');
+
+        var typeSel = document.createElement('select');
+        typeSel.className = 'field-type';
+        var types = ['text_short', 'text_long', 'email', 'select'];
+        var labels = { text_short: 'Текст (краткий)', text_long: 'Текст (развёрнутый)', email: 'Email', select: 'Выпадающий список' };
+        types.forEach(function (t) {
+          var opt = document.createElement('option');
+          opt.value = t;
+          opt.textContent = labels[t];
+          if (data && data.type === t) opt.selected = true;
+          typeSel.appendChild(opt);
+        });
+
+        var labelInput = document.createElement('input');
+        labelInput.className = 'field-label';
+        labelInput.type = 'text';
+        labelInput.placeholder = 'Название поля';
+        if (data && data.label) labelInput.value = data.label;
+
+        var reqCheck = document.createElement('input');
+        reqCheck.className = 'field-required';
+        reqCheck.type = 'checkbox';
+        if (data && data.required) reqCheck.checked = true;
+
+        var optionsArea = document.createElement('div');
+        optionsArea.className = 'options-area';
+        var optionsLabel = document.createElement('label');
+        optionsLabel.textContent = 'Варианты (каждый с новой строки):';
+        optionsLabel.style.fontSize = '0.8rem';
+        optionsArea.appendChild(optionsLabel);
+        var optionsTextarea = document.createElement('textarea');
+        optionsTextarea.className = 'field-options';
+        if (data && data.options) optionsTextarea.value = data.options.join('\n');
+        optionsTextarea.style.display = 'none';
+        optionsArea.appendChild(optionsTextarea);
+
+        var removeBtn = document.createElement('button');
+        removeBtn.className = 'btn-remove';
+        removeBtn.type = 'button';
+        removeBtn.textContent = '✕';
+        removeBtn.addEventListener('click', function () { row.remove(); });
+
+        typeSel.addEventListener('change', function () {
+          optionsTextarea.style.display = typeSel.value === 'select' ? '' : 'none';
+        });
+        if (data && data.type === 'select') optionsTextarea.style.display = '';
+
+        row.appendChild(typeSel);
+        row.appendChild(labelInput);
+        row.appendChild(reqCheck);
+        row.appendChild(optionsArea);
+        row.appendChild(removeBtn);
+        container.appendChild(row);
+        if (scroll) row.scrollIntoView({ behavior: 'smooth' });
+      }
+
+      function publishEditorForm() {
+        if (!currentFormId) return;
+        // save first
+        saveEditorForm({ preventDefault: function () {} });
+        setTimeout(function () {
+          api('/forms/' + currentFormId + '/publish', { method: 'PUT' })
+            .then(function (res) {
+              if (res.status === 200) {
+                loadForms();
+                showView('forms-view');
+              }
+            });
+        }, 200);
+      }
+
+      // --- answers ---
+      function loadAnswers(formId) {
+        currentAnswersFormId = formId;
+        document.getElementById('answer-detail').style.display = 'none';
+        document.getElementById('answers-table-wrap').innerHTML = '<div class="empty-state">Загрузка…</div>';
+        api('/forms/' + formId + '/answers')
+          .then(function (res) {
+            if (res.status !== 200) return;
+            var answers = res.data;
+            if (!answers.length) {
+              document.getElementById('answers-table-wrap').innerHTML = '<div class="empty-state">Ответов нет.</div>';
+              return;
+            }
+            var form = null;
+            api('/forms/' + formId).then(function (r) { if (r.status === 200) form = r.data; });
+            var html = '<div class="answers-grid">';
+            answers.forEach(function (a) {
+              html += '<div class="answer-card"><h4>Ответ #' + esc(a.id.substring(0, 8)) + '</h4>';
+              html += '<dl class="answer-detail">';
+              (a.answers || []).forEach(function (ans) {
+                var field = (form && form.fields) ? form.fields.find(function (f) { return f.fieldId === ans.fieldId; }) : null;
+                html += '<dt>' + (field ? esc(field.label) : esc(ans.fieldId)) + ':</dt>';
+                html += '<dd>' + esc(ans.value) + '</dd>';
+              });
+              html += '<dt>Отправлен:</dt><dd>' + esc(a.submittedAt) + '</dd>';
+              html += '</dl>';
+              html += '<button class="btn btn-sm btn-secondary view-answer-btn" data-id="' + esc(a.id) + '">Полностью</button>';
+              html += '</div>';
+            });
+            html += '</div>';
+            document.getElementById('answers-table-wrap').innerHTML = html;
+            document.querySelectorAll('.view-answer-btn').forEach(function (b) {
+              b.addEventListener('click', function () { loadSingleAnswer(formId, this.getAttribute('data-id')); });
+            });
+          });
+      }
+
+      function loadSingleAnswer(formId, answerId) {
+        api('/forms/' + formId + '/answers/' + answerId)
+          .then(function (res) {
+            if (res.status !== 200) return;
+            var a = res.data;
+            var detail = document.getElementById('answer-detail');
+            detail.style.display = 'block';
+            detail.innerHTML = '<h3>Ответ #' + esc(a.id.substring(0, 8)) + '</h3>';
+            var dl = document.createElement('dl');
+            dl.className = 'answer-detail';
+            (a.answers || []).forEach(function (ans) {
+              var dt = document.createElement('dt');
+              dt.textContent = ans.fieldId + ':';
+              dl.appendChild(dt);
+              var dd = document.createElement('dd');
+              dd.textContent = ans.value;
+              dd.style.whiteSpace = 'pre-wrap';
+              dl.appendChild(dd);
+            });
+            detail.appendChild(dl);
+          });
+      }
+
+      // --- init ---
+      document.getElementById('btn-new').addEventListener('click', function () {
+        currentFormId = null;
+        document.getElementById('editor-title').textContent = 'Новая форма';
+        document.getElementById('edit-name').value = '';
+        document.getElementById('edit-description').value = '';
+        fieldCounter = 0;
+        document.getElementById('fields-container').innerHTML = '';
+        document.getElementById('link-preview').style.display = 'none';
+        clearErrors();
+        showView('editor-view');
+      });
+
+      document.getElementById('editor-form').addEventListener('submit', saveEditorForm);
+      document.getElementById('btn-publish').addEventListener('click', publishEditorForm);
+
+      document.getElementById('btn-add-field').addEventListener('click', function () { addFieldRow(null, true); });
+
+      document.getElementById('back-to-forms').addEventListener('click', function () { loadForms(); showView('forms-view'); });
+      document.getElementById('back-to-answers-list').addEventListener('click', function () { showView('forms-view'); loadForms(); });
+
+      document.querySelectorAll('.admin-tab').forEach(function (tab) {
+        tab.addEventListener('click', function (e) {
+          e.preventDefault();
+          var v = this.getAttribute('data-view');
+          if (v === 'editor-view' || v === 'answers-view') return;
+          showView(v);
+          if (v === 'forms-view') loadForms();
+        });
+      });
+
+      loadForms();
+    })();
+  </script>
+</body>
+</html>
