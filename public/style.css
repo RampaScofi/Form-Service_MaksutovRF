@@ -261,41 +261,35 @@ body {
   border: 1px solid #d1d5db;
   border-radius: 6px;
   padding: 0.75rem 1rem;
-  margin-bottom: 1.25rem;
+  margin: 0 0 1.25rem;
 }
 
-.form-field fieldset.choice-group legend {
-  font-weight: 500;
-  font-size: 0.95rem;
-  padding: 0;
-  border: none;
-  margin: 0 0 0.5rem;
-}
-
-.form-field fieldset.choice-group .choice-option {
-  margin-bottom: 0.25rem;
-}
-
-.form-field fieldset.choice-group .choice-option label {
+.form-field .choice-option {
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  padding: 0.25rem 0;
-  cursor: pointer;
   min-height: 40px;
-  font-weight: 400;
-  margin-bottom: 0;
+  margin-bottom: 0.25rem;
 }
 
-.form-field fieldset.choice-group .choice-option input[type="radio"],
-.form-field fieldset.choice-group .choice-option input[type="checkbox"] {
+.form-field .choice-option input[type="radio"],
+.form-field .choice-option input[type="checkbox"] {
   width: auto;
   display: inline-block;
+  flex-shrink: 0;
   margin: 0;
-  min-height: 20px;
+  min-height: auto;
+  padding: 0;
 }
 
-.form-field fieldset.choice-group.has-error {
+.form-field .choice-option label {
+  display: inline;
+  margin: 0;
+  font-weight: 400;
+  cursor: pointer;
+}
+
+.form-field .choice-group.has-error {
   border-color: #ef4444;
   box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.15);
 }

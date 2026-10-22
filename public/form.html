@@ -61,7 +61,8 @@
         wrapper.setAttribute('data-field-id', field.fieldId);
 
         var label = document.createElement('label');
-        label.htmlFor = field.fieldId;
+        var isChoiceType = field.type === 'radio' || field.type === 'checkbox_group';
+        if (!isChoiceType) label.htmlFor = field.fieldId;
         label.textContent = field.label;
         if (field.required) {
           var asterisk = document.createElement('span');
@@ -137,15 +138,6 @@
           var choiceGroup = document.createElement('fieldset');
           choiceGroup.className = 'choice-group';
           choiceGroup.setAttribute('data-field-id', field.fieldId);
-          var legend = document.createElement('legend');
-          legend.textContent = field.label;
-          if (field.required) {
-            var reqMarker = document.createElement('span');
-            reqMarker.className = 'required-marker';
-            reqMarker.textContent = '*';
-            legend.appendChild(reqMarker);
-          }
-          choiceGroup.appendChild(legend);
           (field.options || []).forEach(function (opt, idx) {
             var optDiv = document.createElement('div');
             optDiv.className = 'choice-option';
@@ -157,12 +149,10 @@
             if (field.required && field.type === 'radio') cb.setAttribute('required', '');
             var cbLabel = document.createElement('label');
             cbLabel.htmlFor = cb.id;
-            cbLabel.textContent = opt;
-            cbLabel.style.cursor = 'pointer';
-            cbLabel.style.minHeight = '40px';
-            cbLabel.style.display = 'flex';
-            cbLabel.style.alignItems = 'center';
-            cbLabel.style.padding = '0.25rem 0';
+            var optSpan = document.createElement('span');
+            optSpan.className = 'choice-text';
+            optSpan.textContent = opt;
+            cbLabel.appendChild(optSpan);
             optDiv.appendChild(cb);
             optDiv.appendChild(cbLabel);
             choiceGroup.appendChild(optDiv);
