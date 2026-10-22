@@ -165,6 +165,12 @@ router.get('/api/forms', (req, res) => {
   res.json(list);
 });
 
+router.get('/api/forms/:id', (req, res) => {
+  const form = store.getFormById(req.params.id);
+  if (!form) return send404(res);
+  return res.status(200).json(publicFormView(form));
+});
+
 router.post('/api/forms', (req, res) => {
   const { errors, values } = validateFormPayload(req.body, { partial: false });
   if (errors.length) return badRequest(res, errors);
@@ -189,6 +195,13 @@ router.put('/api/forms/:id/publish', (req, res) => {
   if (!form) return send404(res);
   const published = store.publishForm(form.id);
   return res.status(200).json({ id: published.id, slug: published.slug, status: published.status });
+});
+
+router.put('/api/forms/:id/unpublish', (req, res) => {
+  const form = store.getFormById(req.params.id);
+  if (!form) return send404(res);
+  const draft = store.unpublishForm(form.id);
+  return res.status(200).json({ id: draft.id, slug: draft.slug, status: draft.status });
 });
 
 router.delete('/api/forms/:id', (req, res) => {

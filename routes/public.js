@@ -116,6 +116,7 @@ function renderFormHtml(form) {
 
   const schema = {
     id: form.id,
+    slug: form.slug,
     name: form.name,
     description: form.description,
     fields: form.fields || [],

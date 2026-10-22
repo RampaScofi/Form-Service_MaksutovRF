@@ -85,9 +85,11 @@ data/
 - `POST /api/forms` — создать форму `{name, description, fields}`
 - `PUT /api/forms/:id` — обновить форму
 - `PUT /api/forms/:id/publish` — опубликовать (генерируется slug)
+- `PUT /api/forms/:id/unpublish` — снять с публикации (slug сохраняется)
 - `DELETE /api/forms/:id` — удалить форму вместе с ответами
 - `GET /api/forms/:id/answers` — список ответов
 - `GET /api/forms/:id/answers/:answerId` — один ответ
+- `GET /api/forms/:id` — одна форма по id
 
 Публичная часть:
 

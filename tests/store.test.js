@@ -388,4 +388,97 @@ describe('routes', () => {
     assert.strictEqual(res.status, 200);
     assert.strictEqual(store.getFormById(form.id), null);
   });
+
+  // P0-1: GET /api/forms/:id → 200
+  test('GET /api/forms/:id → 200', async () => {
+    const form = store.createForm({
+      name: 'GetById Test',
+      description: 'desc',
+      fields: [{ type: 'text_short', label: 'Q', required: true, fieldId: 'q1' }],
+    });
+    const res = await request('GET', `/api/forms/${form.id}`);
+    assert.strictEqual(res.status, 200);
+    assert.strictEqual(res.data.id, form.id);
+    assert.strictEqual(res.data.name, 'GetById Test');
+    assert.strictEqual(res.data.description, 'desc');
+    assert.strictEqual(res.data.fields.length, 1);
+    assert.strictEqual(res.data.fields[0].fieldId, 'q1');
+    assert.strictEqual(res.data.status, 'draft');
+    assert.strictEqual(res.data.slug, null);
+    assert.ok(res.data.createdAt);
+    assert.ok(res.data.updatedAt);
+  });
+
+  // P0-1: GET /api/forms/:id unknown → 404
+  test('GET /api/forms/:id unknown → 404', async () => {
+    const res = await request('GET', '/api/forms/nonexistent-id-12345');
+    assert.strictEqual(res.status, 404);
+    assert.strictEqual(res.data.error, 'Form not found');
+  });
+
+  // P1-6: unpublishForm store method
+  test('unpublishForm → status draft, slug preserved', () => {
+    const form = store.createForm({ name: 'Unpub Test', fields: [] });
+    const pub = store.publishForm(form.id);
+    assert.strictEqual(pub.status, 'published');
+    const slug = pub.slug;
+    const unpub = store.unpublishForm(form.id);
+    assert.strictEqual(unpub.status, 'draft');
+    assert.strictEqual(unpub.slug, slug);
+    assert.ok(unpub.updatedAt);
+  });
+
+  // P1-6: PUT /api/forms/:id/unpublish → 200
+  test('PUT /api/forms/:id/unpublish → 200', async () => {
+    const form = store.createForm({ name: 'Unpub Route', fields: [] });
+    store.publishForm(form.id);
+    const res = await request('PUT', `/api/forms/${form.id}/unpublish`);
+    assert.strictEqual(res.status, 200);
+    assert.strictEqual(res.data.status, 'draft');
+    assert.ok(res.data.slug);
+  });
+
+  // P0-2: HTML публичной формы содержит type="submit" кнопку
+  test('HTML публичной формы содержит button type="submit"', async () => {
+    const form = store.createForm({
+      name: 'Submit Button Test',
+      fields: [{ type: 'text_short', label: 'Q', required: true, fieldId: 'f1' }],
+    });
+    const pub = store.publishForm(form.id);
+    const res = await request('GET', `/f/${pub.slug}`);
+    assert.strictEqual(res.status, 200);
+    assert.ok(res.raw.includes('type="submit"'), 'HTML contains submit button');
+    assert.ok(res.raw.includes('Отправить заявку'), 'Button text present');
+  });
+
+  // P0-2: Публичная схема содержит slug
+  test('Публичная схема содержит slug', async () => {
+    const form = store.createForm({
+      name: 'Slug Schema Test',
+      fields: [],
+    });
+    const pub = store.publishForm(form.id);
+    const res = await request('GET', `/f/${pub.slug}`);
+    assert.strictEqual(res.status, 200);
+    assert.ok(res.raw.includes(`"slug":"${pub.slug}"`), 'slug in form schema');
+  });
+
+  // Data persistence: create form, reload, verify data not lost
+  test('Данные сохраняются после перезагрузки store', () => {
+    const form = store.createForm({
+      name: 'Persist Test',
+      description: 'persist desc',
+      fields: [{ type: 'email', label: 'Email', required: false, fieldId: 'em1' }],
+    });
+    store.createAnswer(form.id, { answers: [{ fieldId: 'em1', value: 'test@example.com' }] });
+    // Simulate reload: read from file again
+    const reloaded = store.getFormById(form.id);
+    assert.strictEqual(reloaded.name, 'Persist Test');
+    assert.strictEqual(reloaded.description, 'persist desc');
+    assert.strictEqual(reloaded.fields.length, 1);
+    assert.strictEqual(reloaded.fields[0].fieldId, 'em1');
+    const answers = store.getAllAnswers(form.id);
+    assert.strictEqual(answers.length, 1);
+    assert.strictEqual(answers[0].answers[0].value, 'test@example.com');
+  });
 });

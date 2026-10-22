@@ -269,6 +269,24 @@ function publishForm(id, slug) {
   return forms[index];
 }
 
+/**
+ * Mark a form as unpublished (draft). Slug is preserved so previously shared
+ * links stop working (form becomes 404) but the slug will be reused on republish.
+ */
+function unpublishForm(id) {
+  const forms = getAllForms();
+  const index = forms.findIndex((form) => form.id === id);
+  if (index === -1) return null;
+  const current = forms[index];
+  forms[index] = {
+    ...current,
+    status: 'draft',
+    updatedAt: new Date().toISOString(),
+  };
+  writeArray(formsFile(), forms);
+  return forms[index];
+}
+
 /** Remove a form and its answers. Returns true when something was deleted. */
 function deleteForm(id) {
   const forms = getAllForms();
@@ -334,6 +352,7 @@ module.exports = {
   createForm,
   updateForm,
   publishForm,
+  unpublishForm,
   deleteForm,
   getAllAnswers,
   getAnswerById,

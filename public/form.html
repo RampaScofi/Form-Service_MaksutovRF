@@ -10,7 +10,9 @@
   <div class="form-container">
     <h1 id="form-title"></h1>
     <p id="form-description" class="form-description"></p>
-    <form id="form" novalidate></form>
+    <form id="form" novalidate>
+      <button type="submit" class="btn btn-primary" id="submit-btn" style="display:block; width:100%; padding:0.75rem 1.5rem; font-size:1rem; margin-top:0.5rem;">Отправить заявку</button>
+    </form>
     <div id="success" class="success-message" style="display:none;"></div>
     <div id="generic-error" class="error-message" style="display:none;"></div>
   </div>
@@ -28,6 +30,7 @@
       var form = document.getElementById('form');
       var successEl = document.getElementById('success');
       var genericErrorEl = document.getElementById('generic-error');
+      var submitBtn = document.getElementById('submit-btn');
 
       var emailRe = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 
@@ -92,7 +95,7 @@
         errorEl.id = 'error-' + field.fieldId;
         wrapper.appendChild(errorEl);
 
-        form.appendChild(wrapper);
+        form.insertBefore(wrapper, submitBtn);
       });
 
       form.addEventListener('submit', function (e) {
@@ -135,7 +138,9 @@
           return;
         }
 
-        fetch('/api/forms/' + schema.id + '/submit', {
+        submitBtn.disabled = true;
+
+        fetch('/api/forms/' + schema.slug + '/submit', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ answers: answers })
@@ -144,15 +149,17 @@
         .then(function (data) {
           if (data.errors && data.errors.length) {
             showClientErrors(data.errors);
+            submitBtn.disabled = false;
             return;
           }
           form.style.display = 'none';
           successEl.style.display = 'block';
-          successEl.textContent = 'Спасибо! Ваша заявка отправлена.';
+          successEl.textContent = '✅ Спасибо! Ваша заявка отправлена.';
         })
         .catch(function () {
           genericErrorEl.style.display = 'block';
           genericErrorEl.textContent = 'Ошибка отправки. Попробуйте позже.';
+          submitBtn.disabled = false;
         });
       });
 

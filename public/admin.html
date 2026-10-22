@@ -144,7 +144,7 @@
                 '<td>' + esc(f.answersCount || 0) + '</td>' +
                 '<td>' +
                   '<button class="btn btn-secondary btn-sm edit-btn" data-id="' + esc(f.id) + '">Ред.</button> ' +
-                  '<button class="btn btn-sm ' + (f.status === 'draft' ? 'btn-warning' : 'btn-success') + ' publish-btn" data-id="' + esc(f.id) + '" data-status="' + esc(f.status) + '">' + (f.status === 'draft' ? 'Опубликовать' : 'Опубликована') + '</button> ' +
+                  '<button class="btn btn-sm ' + (f.status === 'draft' ? 'btn-warning' : 'btn-warning') + ' publish-btn" data-id="' + esc(f.id) + '" data-status="' + esc(f.status) + '">' + (f.status === 'draft' ? 'Опубликовать' : 'Снять с публикации') + '</button> ' +
                   '<button class="btn btn-sm btn-danger delete-btn" data-id="' + esc(f.id) + '">Удалить</button> ' +
                   '<button class="btn btn-sm btn-secondary answers-btn" data-id="' + esc(f.id) + '">Ответы</button>' +
                 '</td></tr>';
@@ -157,7 +157,7 @@
               b.addEventListener('click', function () { openEditor(this.getAttribute('data-id')); });
             });
             container.querySelectorAll('.publish-btn').forEach(function (b) {
-              b.addEventListener('click', function () { publishForm(this.getAttribute('data-id')); });
+              b.addEventListener('click', function () { publishForm(this.getAttribute('data-id'), this.getAttribute('data-status')); });
             });
             container.querySelectorAll('.delete-btn').forEach(function (b) {
               b.addEventListener('click', function () { deleteForm(this.getAttribute('data-id')); });
@@ -168,8 +168,9 @@
           });
       }
 
-      function publishForm(id) {
-        api('/forms/' + id + '/publish', { method: 'PUT' })
+      function publishForm(id, status) {
+        var action = status === 'draft' ? '/forms/' + id + '/publish' : '/forms/' + id + '/unpublish';
+        api(action, { method: 'PUT' })
           .then(function (res) {
             if (res.status !== 200) return;
             loadForms();
@@ -314,17 +315,39 @@
 
       function publishEditorForm() {
         if (!currentFormId) return;
-        // save first
-        saveEditorForm({ preventDefault: function () {} });
-        setTimeout(function () {
-          api('/forms/' + currentFormId + '/publish', { method: 'PUT' })
-            .then(function (res) {
-              if (res.status === 200) {
-                loadForms();
-                showView('forms-view');
-              }
-            });
-        }, 200);
+        // save first, then publish — sequential Promise chain
+        var name = document.getElementById('edit-name').value.trim();
+        var description = document.getElementById('edit-description').value.trim();
+        var fields = [];
+        document.querySelectorAll('#fields-container .field-row').forEach(function (row) {
+          fields.push({
+            fieldId: row.getAttribute('data-field-id') || '',
+            type: row.querySelector('.field-type').value,
+            label: row.querySelector('.field-label').value.trim(),
+            required: row.querySelector('.field-required').checked,
+            options: row.querySelector('.field-options').value.split('\n').map(function (o) { return o.trim(); }).filter(Boolean),
+          });
+        });
+
+        var body = { name: name, description: description, fields: fields };
+        api('/forms/' + currentFormId, { method: 'PUT', body: JSON.stringify(body) })
+          .then(function (saveRes) {
+            if (saveRes.status !== 200) {
+              clearErrors();
+              (saveRes.data.errors || []).forEach(function (err) {
+                var el = document.getElementById('err-' + err.field);
+                if (el) el.textContent = err.message;
+              });
+              return;
+            }
+            return api('/forms/' + currentFormId + '/publish', { method: 'PUT' })
+              .then(function (pubRes) {
+                if (pubRes.status === 200) {
+                  loadForms();
+                  showView('forms-view');
+                }
+              });
+          });
       }
 
       // --- answers ---
@@ -332,34 +355,41 @@
         currentAnswersFormId = formId;
         document.getElementById('answer-detail').style.display = 'none';
         document.getElementById('answers-table-wrap').innerHTML = '<div class="empty-state">Загрузка…</div>';
-        api('/forms/' + formId + '/answers')
-          .then(function (res) {
-            if (res.status !== 200) return;
-            var answers = res.data;
-            if (!answers.length) {
-              document.getElementById('answers-table-wrap').innerHTML = '<div class="empty-state">Ответов нет.</div>';
-              return;
-            }
-            var form = null;
-            api('/forms/' + formId).then(function (r) { if (r.status === 200) form = r.data; });
-            var html = '<div class="answers-grid">';
-            answers.forEach(function (a) {
-              html += '<div class="answer-card"><h4>Ответ #' + esc(a.id.substring(0, 8)) + '</h4>';
-              html += '<dl class="answer-detail">';
-              (a.answers || []).forEach(function (ans) {
-                var field = (form && form.fields) ? form.fields.find(function (f) { return f.fieldId === ans.fieldId; }) : null;
-                html += '<dt>' + (field ? esc(field.label) : esc(ans.fieldId)) + ':</dt>';
-                html += '<dd>' + esc(ans.value) + '</dd>';
+        showView('answers-view');
+
+        // P1-5: load form first, then answers — no race condition
+        api('/forms/' + formId)
+          .then(function (formRes) {
+            var form = (formRes.status === 200) ? formRes.data : null;
+            var heading = document.querySelector('#answers-view h2');
+            if (heading && form) heading.textContent = 'Ответы — ' + form.name;
+
+            return api('/forms/' + formId + '/answers').then(function (res) {
+              if (res.status !== 200) return;
+              var answers = res.data;
+              if (!answers.length) {
+                document.getElementById('answers-table-wrap').innerHTML = '<div class="empty-state">📬 Ответов пока нет.</div>';
+                return;
+              }
+              var html = '<div class="answers-grid">';
+              answers.forEach(function (a) {
+                html += '<div class="answer-card"><h4>Ответ #' + esc(a.id.substring(0, 8)) + '</h4>';
+                html += '<dl class="answer-detail">';
+                (a.answers || []).forEach(function (ans) {
+                  var field = (form && form.fields) ? form.fields.find(function (f) { return f.fieldId === ans.fieldId; }) : null;
+                  html += '<dt>' + (field ? esc(field.label) : esc(ans.fieldId)) + ':</dt>';
+                  html += '<dd>' + esc(ans.value) + '</dd>';
+                });
+                html += '<dt>Отправлен:</dt><dd>' + esc(a.submittedAt) + '</dd>';
+                html += '</dl>';
+                html += '<button class="btn btn-sm btn-secondary view-answer-btn" data-id="' + esc(a.id) + '">Полностью</button>';
+                html += '</div>';
               });
-              html += '<dt>Отправлен:</dt><dd>' + esc(a.submittedAt) + '</dd>';
-              html += '</dl>';
-              html += '<button class="btn btn-sm btn-secondary view-answer-btn" data-id="' + esc(a.id) + '">Полностью</button>';
               html += '</div>';
-            });
-            html += '</div>';
-            document.getElementById('answers-table-wrap').innerHTML = html;
-            document.querySelectorAll('.view-answer-btn').forEach(function (b) {
-              b.addEventListener('click', function () { loadSingleAnswer(formId, this.getAttribute('data-id')); });
+              document.getElementById('answers-table-wrap').innerHTML = html;
+              document.querySelectorAll('.view-answer-btn').forEach(function (b) {
+                b.addEventListener('click', function () { loadSingleAnswer(formId, this.getAttribute('data-id')); });
+              });
             });
           });
       }
